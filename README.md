@@ -200,7 +200,7 @@ pip3 install flask numpy scipy matplotlib plotly
 
 ## 🚀 Version
 
-**UZAYTEK Motor Analysis v2.0**
+**UZAYTEK Motor Analysis v1.1**
 - Developed by: Berke Tezgöçen
 - Idea & Testing: Ayberk Cem Aksoy
 - Professional Rocket Propulsion Design Tool
