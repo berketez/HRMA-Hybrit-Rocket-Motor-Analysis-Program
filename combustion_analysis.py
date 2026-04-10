@@ -126,8 +126,11 @@ class CombustionAnalyzer:
             molecular_weight = 25.0  # Typical for combustion gases
             gas_constant = self.R_universal / molecular_weight
         
-        throat_pressure = chamber_pressure / 1.89  # Typical choked flow pressure ratio
-        throat_temperature = chamber_temperature * 0.85  # Typical expansion cooling
+        # Use isentropic relations for choked flow at the throat
+        # gamma_chamber comes from Cantera or fallback above
+        gamma_throat = gamma_chamber if gamma_chamber > 1.0 else 1.2
+        throat_pressure = chamber_pressure * (2 / (gamma_throat + 1)) ** (gamma_throat / (gamma_throat - 1))
+        throat_temperature = chamber_temperature * 2 / (gamma_throat + 1)
         throat_composition = self._calculate_equilibrium_composition(
             elements, throat_pressure, throat_temperature, 'throat'
         )
@@ -529,20 +532,32 @@ class CombustionAnalyzer:
             
             # Exit velocity at this altitude
             pressure_ratio = P_c / P
+            mdot_total = motor_data.get('mdot_total', 1.0)
+            # Compute exit area and exit pressure for pressure thrust term
+            throat_area = motor_data.get('throat_area', 0.001)  # m^2
+            expansion_ratio = motor_data.get('expansion_ratio', 4.0)
+            exit_area = throat_area * expansion_ratio
             if pressure_ratio > 1:
-                v_exit = np.sqrt(2 * gamma * motor_data['gas_constants']['chamber'] * 
-                               motor_data['conditions']['chamber']['T'] / (gamma - 1) * 
+                v_exit = np.sqrt(2 * gamma * motor_data['gas_constants']['chamber'] *
+                               motor_data['conditions']['chamber']['T'] / (gamma - 1) *
                                (1 - (P / P_c)**((gamma - 1) / gamma)))
-                
+
+                # Exit pressure from isentropic relations
+                P_exit_actual = motor_data.get('conditions', {}).get('exit', {}).get('P', 1.0)  # bar
+                # Pressure thrust: (P_exit - P_ambient) * A_exit
+                pressure_thrust = (P_exit_actual * 1e5 - P * 1e5) * exit_area  # N
+
                 cf = v_exit / motor_data['performance']['c_star']
                 isp = v_exit / 9.81
-                thrust = motor_data.get('mdot_total', 1.0) * v_exit
+                thrust = mdot_total * v_exit + pressure_thrust
             else:
                 # Under-expanded
                 v_exit = motor_data['performance']['velocities']['exit']
                 cf = motor_data['performance']['cf']
                 isp = motor_data['performance']['isp']
-                thrust = motor_data.get('mdot_total', 1.0) * v_exit
+                P_exit_actual = motor_data.get('conditions', {}).get('exit', {}).get('P', 1.0)  # bar
+                pressure_thrust = (P_exit_actual * 1e5 - P * 1e5) * exit_area  # N
+                thrust = mdot_total * v_exit + pressure_thrust
             
             performance_data.append({
                 'altitude': altitude,

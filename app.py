@@ -50,6 +50,10 @@ from chemical_database import chemical_db
 from experimental_validation import experimental_validator
 from cfd_analysis import cfd_analyzer
 from kinetic_analysis import kinetic_analyzer
+import logging
+import traceback as traceback_module
+
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
@@ -153,7 +157,7 @@ def formulas():
 
 @app.route('/test')
 def test():
-    return render_template('test_simple.html')
+    return render_template('simple.html')
 
 @app.route('/test-simple')
 def test_simple():
@@ -278,7 +282,7 @@ def calculate():
         if data.get('include_heat_analysis', False):
             from heat_transfer_analysis import HeatTransferAnalyzer
             heat_analyzer = HeatTransferAnalyzer()
-            heat_data = heat_analyzer.analyze_chamber_thermal(motor_results, data.get('material_type', 'steel'))
+            heat_data = heat_analyzer.analyze_heat_transfer(motor_results, material=data.get('material_type', 'steel'))
             heat_transfer_plot = create_heat_transfer_plots(heat_data)
         
         # Generate combustion analysis if requested  
@@ -296,8 +300,8 @@ def calculate():
         if data.get('include_structural_analysis', False):
             from structural_analysis import StructuralAnalyzer
             structural_analyzer = StructuralAnalyzer()
-            structural_data = structural_analyzer.analyze_chamber_structure(
-                motor_results, data.get('material_type', 'steel_4130')
+            structural_data = structural_analyzer.analyze_structure(
+                motor_results, material=data.get('material_type', 'steel_4130')
             )
             structural_analysis_plot = create_structural_analysis_plots(structural_data)
         
@@ -443,14 +447,10 @@ def calculate():
             return jsonify(sanitize_json_values(basic_results))
         
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"Error in calculate: {str(e)}")
-        print(f"Traceback: {error_traceback}")
+        logger.error(f"Error in calculate: {str(e)}")
+        logger.error(traceback_module.format_exc())
         return jsonify({
-            'error': str(e),
-            'traceback': error_traceback,
-            'received_data': data,
+            'error': 'Internal server error. Check server logs for details.',
             'error_type': type(e).__name__
         }), 400
 
@@ -501,13 +501,10 @@ def calculate_solid():
         return jsonify(sanitized_results)
         
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"Solid motor calculation error: {str(e)}")
-        print(f"Traceback: {error_traceback}")
+        logger.error(f"Solid motor calculation error: {str(e)}")
+        logger.error(traceback_module.format_exc())
         return jsonify({
-            'error': str(e),
-            'traceback': error_traceback,
+            'error': 'Internal server error. Check server logs for details.',
             'error_type': type(e).__name__
         }), 400
 
@@ -555,13 +552,10 @@ def calculate_liquid():
         return jsonify(sanitized_results)
         
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"Liquid motor calculation error: {str(e)}")
-        print(f"Traceback: {error_traceback}")
+        logger.error(f"Liquid motor calculation error: {str(e)}")
+        logger.error(traceback_module.format_exc())
         return jsonify({
-            'error': str(e),
-            'traceback': error_traceback,
+            'error': 'Internal server error. Check server logs for details.',
             'error_type': type(e).__name__
         }), 400
 
@@ -600,65 +594,11 @@ def export_tank_cad():
 
 @app.route('/export_solid_motor_cad', methods=['POST'])
 def export_solid_motor_cad():
-    """Export CAD files for solid rocket motor"""
-    try:
-        data = request.get_json()
-        motor_data = data.get('motor_data')
-        
-        if not motor_data:
-            return jsonify({'error': 'Motor data not found'}), 400
-        
-        # Generate comprehensive CAD package for solid motor
-        cad_files = {
-            'step_files': [
-                'Motor_Assembly.step',
-                'Case_Design.step', 
-                'Grain_Geometry.step',
-                'Nozzle_Design.step',
-                'Forward_Closure.step',
-                'Aft_Closure.step'
-            ],
-            'stl_files': [
-                'Motor_Assembly.stl',
-                'Case_Visualization.stl',
-                'Grain_3D_Model.stl',
-                'Nozzle_Contour.stl'
-            ],
-            'technical_drawings': [
-                'Motor_Assembly_Drawing.pdf',
-                'Case_Detail_Drawing.pdf',
-                'Grain_Geometry_Drawing.pdf',
-                'Nozzle_Profile_Drawing.pdf',
-                'Manufacturing_Specifications.pdf'
-            ],
-            'manufacturing_docs': [
-                'Assembly_Instructions.pdf',
-                'Quality_Control_Checklist.pdf',
-                'Material_Specifications.json',
-                'Tolerances_and_Fits.json'
-            ]
-        }
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Solid motor CAD files created successfully!',
-            'cad_package': {
-                'total_files': sum(len(files) for files in cad_files.values()),
-                'package_size': '45.2 MB',
-                'format_compatibility': ['CATIA V5', 'SolidWorks', 'Inventor', 'Fusion 360'],
-                'files_included': cad_files
-            },
-            'download_info': {
-                'package_name': f'UZAYTEK_Solid_Motor_CAD_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip',
-                'estimated_download_time': '30 seconds',
-                'file_quality': 'Professional Grade'
-            }
-        })
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'CAD export error: {str(e)}'}), 500
+    """Export CAD files for solid rocket motor - NOT YET IMPLEMENTED"""
+    return jsonify({
+        'status': 'not_implemented',
+        'message': 'Solid motor CAD export is not yet implemented. This feature is coming soon.'
+    }), 501
 
 @app.route('/optimize', methods=['POST'])
 def optimize_injector():
@@ -940,8 +880,8 @@ def advanced_analysis():
         if 'heat_transfer' in analysis_types:
             from heat_transfer_analysis import HeatTransferAnalyzer
             heat_analyzer = HeatTransferAnalyzer()
-            heat_data = heat_analyzer.analyze_chamber_thermal(
-                motor_data, data.get('material_type', 'steel')
+            heat_data = heat_analyzer.analyze_heat_transfer(
+                motor_data, material=data.get('material_type', 'steel')
             )
             results['heat_transfer_plot'] = create_heat_transfer_plots(heat_data)
             results['heat_analysis'] = heat_data
@@ -962,8 +902,8 @@ def advanced_analysis():
         if 'structural' in analysis_types:
             from structural_analysis import StructuralAnalyzer
             structural_analyzer = StructuralAnalyzer()
-            structural_data = structural_analyzer.analyze_chamber_structure(
-                motor_data, data.get('material_type', 'steel_4130')
+            structural_data = structural_analyzer.analyze_structure(
+                motor_data, material=data.get('material_type', 'steel_4130')
             )
             results['structural_plot'] = create_structural_analysis_plots(structural_data)
             results['structural_analysis'] = structural_data
@@ -1353,8 +1293,10 @@ def download_stl_file(filename):
     """Download STL files"""
     try:
         from flask import send_file
+        from werkzeug.utils import secure_filename
         import os
-        
+
+        filename = secure_filename(filename)
         file_path = f"./cad_exports/{filename}"
         if os.path.exists(file_path):
             return send_file(file_path, as_attachment=True)
@@ -1391,39 +1333,11 @@ def export_simulation_file():
 
 @app.route('/api/generate-cad', methods=['POST'])
 def generate_cad():
-    """Generate 3D CAD design for motor"""
-    try:
-        data = request.json
-        motor_data = data.get('motor_data', {})
-        
-        # Simplified CAD generation for now
-        return jsonify({
-            'status': 'success',
-            'cad_visualization': 'CAD visualization generated',
-            'technical_drawings': {
-                'chamber_drawing': 'Chamber technical drawing',
-                'nozzle_drawing': 'Nozzle technical drawing',
-                'injector_drawing': 'Injector technical drawing'
-            },
-            'material_specifications': {
-                'chamber_material': 'Steel 4130',
-                'nozzle_material': 'Graphite',
-                'injector_material': 'Stainless Steel 316L'
-            },
-            'manufacturing_notes': [
-                'All dimensions ±0.1mm tolerance',
-                'Surface finish Ra 3.2 μm',
-                'Pressure test at 1.5x operating pressure'
-            ],
-            'performance_summary': {
-                'thrust': motor_data.get('thrust', 1000),
-                'isp': motor_data.get('isp', 250),
-                'burn_time': motor_data.get('burn_time', 10)
-            }
-        })
-        
-    except Exception as e:
-        return jsonify({'status': 'error', 'error': str(e)}), 500
+    """Generate 3D CAD design for motor - NOT YET IMPLEMENTED"""
+    return jsonify({
+        'status': 'not_implemented',
+        'message': 'CAD generation is not yet implemented. This feature is coming soon.'
+    }), 501
 
 @app.route('/api/generate-3d', methods=['POST'])
 def generate_3d():
@@ -1605,16 +1519,12 @@ def export_stl():
             )
         
     except Exception as e:
-        import traceback
-        error_msg = f"STL Export Error: {str(e)}"
-        print(error_msg)
-        print(traceback.format_exc())
-        
+        logger.error(f"STL Export Error: {str(e)}")
+        logger.error(traceback_module.format_exc())
+
         # Return error response
         return jsonify({
-            'error': error_msg,
-            'details': str(e),
-            'traceback': traceback.format_exc(),
+            'error': 'Internal server error. Check server logs for details.',
             'status': 'failed'
         }), 500
 
@@ -2354,13 +2264,13 @@ def perform_complete_professional_analysis():
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)}), 500
 
-@app.route('/api/validate-fuel', methods=['POST'])
-def validate_fuel():
+@app.route('/api/validate-fuel-properties', methods=['POST'])
+def validate_fuel_properties():
     try:
         data = request.json
         fuel_type = data.get('fuel_type', 'htpb')
         temperature = data.get('temperature', 298.15)
-        
+
         print(f"FETCHING NASA CEA DATA: {fuel_type} at {temperature}K")
         
         # Get fuel properties from chemical database
@@ -2756,4 +2666,4 @@ def generate_detailed_cad(motor_type):
 
 if __name__ == '__main__':
     print("Starting Motor Analysis on port 5000...")
-    app.run(debug=True, port=5000, host='127.0.0.1')
+    app.run(debug=False, port=5000, host='127.0.0.1')

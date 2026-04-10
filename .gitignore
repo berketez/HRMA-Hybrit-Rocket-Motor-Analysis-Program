@@ -17,3 +17,7 @@ node_modules/
 .claude/
 propellant_cache/
 *.pkl
+cad_exports/
+__pycache__/
+*.pyc
+nasa_validation_*.txt

@@ -7,6 +7,62 @@ import numpy as np
 import json
 from typing import Dict, List, Tuple, Optional
 
+def _solve_mach_from_area_ratio(epsilon, gamma, supersonic=True):
+    """
+    Solve for Mach number given area ratio A/A* using Newton-Raphson.
+
+    The implicit area-Mach relation is:
+        A/A* = (1/M) * [(2/(gamma+1)) * (1 + (gamma-1)/2 * M^2)]^((gamma+1)/(2*(gamma-1)))
+
+    Args:
+        epsilon: Area ratio A/A* (must be >= 1.0)
+        gamma: Ratio of specific heats
+        supersonic: If True, return supersonic solution (M > 1); else subsonic (M < 1)
+
+    Returns:
+        Mach number
+    """
+    gp1 = gamma + 1
+    gm1 = gamma - 1
+    exponent = gp1 / (2.0 * gm1)
+
+    def area_ratio_func(M):
+        """A/A* as a function of M"""
+        return (1.0 / M) * ((2.0 / gp1) * (1.0 + gm1 / 2.0 * M**2))**exponent
+
+    def area_ratio_deriv(M):
+        """d(A/A*)/dM"""
+        term = 1.0 + gm1 / 2.0 * M**2
+        base = (2.0 / gp1) * term
+        # d/dM of (1/M) * base^exponent
+        # = -1/M^2 * base^exponent + (1/M) * exponent * base^(exponent-1) * (2/gp1) * gm1 * M
+        f_val = base**exponent
+        df_base = exponent * base**(exponent - 1) * (2.0 / gp1) * gm1 * M
+        return -f_val / M**2 + df_base / M
+
+    # Initial guess
+    if supersonic:
+        M = 1.0 + np.sqrt((epsilon - 1.0) * 2.0)
+    else:
+        M = 0.5  # subsonic guess
+
+    # Newton-Raphson iteration (20 iterations is more than enough for convergence)
+    for _ in range(20):
+        f_val = area_ratio_func(M) - epsilon
+        f_deriv = area_ratio_deriv(M)
+        if abs(f_deriv) < 1e-15:
+            break
+        dM = -f_val / f_deriv
+        M = M + dM
+        # Keep M positive and in the right regime
+        if supersonic:
+            M = max(M, 1.001)
+        else:
+            M = max(min(M, 0.999), 0.001)
+
+    return M
+
+
 class NozzleDesigner:
     """Advanced nozzle design and analysis"""
     
@@ -280,13 +336,7 @@ class NozzleDesigner:
         expansion_ratio = nozzle_data['basic_dimensions']['expansion_ratio']
         
         # Calculate exit Mach number from area ratio
-        def mach_from_area_ratio(epsilon, gamma):
-            """Calculate exit Mach number from area ratio using iterative method"""
-            # Simplified approximation for supersonic flow
-            M_e = np.sqrt(2 / (gamma - 1) * ((epsilon)**(2 * (gamma - 1) / (gamma + 1)) - 1))
-            return max(M_e, 1.01)  # Ensure supersonic
-        
-        M_exit = mach_from_area_ratio(expansion_ratio, gamma)
+        M_exit = _solve_mach_from_area_ratio(expansion_ratio, gamma, supersonic=True)
         
         # Calculate exit pressure from Mach number
         P_exit = P_chamber / ((1 + (gamma - 1) / 2 * M_exit**2)**(gamma / (gamma - 1)))

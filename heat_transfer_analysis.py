@@ -50,9 +50,10 @@ class HeatTransferAnalyzer:
             }
         }
     
-    def analyze_heat_transfer(self, motor_data: Dict, material: str = 'steel', 
+    def analyze_heat_transfer(self, motor_data: Dict, material: str = 'steel',
                             wall_thickness: float = 0.005, ambient_temp: float = 293.15,
-                            cooling_type: str = 'natural') -> Dict:
+                            cooling_type: str = 'natural',
+                            method: str = 'bartz') -> Dict:
         """
         Complete heat transfer analysis
         
@@ -62,7 +63,8 @@ class HeatTransferAnalyzer:
             wall_thickness: Wall thickness in meters
             ambient_temp: Ambient temperature in K
             cooling_type: 'natural', 'forced', 'regenerative'
-            
+            method: 'bartz' (primary, Bartz correlation) or 'dittus-boelter' (fallback)
+
         Returns:
             Heat transfer analysis results
         """
@@ -80,7 +82,7 @@ class HeatTransferAnalyzer:
         
         # Calculate heat transfer coefficients
         heat_transfer_coeffs = self._calculate_heat_transfer_coefficients(
-            motor_data, mat_props, cooling_type
+            motor_data, mat_props, cooling_type, method=method
         )
         
         # Gas-side heat transfer
@@ -120,52 +122,133 @@ class HeatTransferAnalyzer:
             }
         }
     
-    def _calculate_heat_transfer_coefficients(self, motor_data: Dict, 
-                                           mat_props: Dict, cooling_type: str) -> Dict:
-        """Calculate heat transfer coefficients"""
-        
+    def _calculate_heat_transfer_coefficients(self, motor_data: Dict,
+                                           mat_props: Dict, cooling_type: str,
+                                           method: str = 'bartz') -> Dict:
+        """Calculate heat transfer coefficients.
+
+        Args:
+            motor_data: Motor performance and geometry data
+            mat_props: Material properties
+            cooling_type: 'natural', 'forced', 'regenerative'
+            method: 'bartz' (primary) or 'dittus-boelter' (fallback)
+
+        Returns:
+            Heat transfer coefficient results
+        """
+
         chamber_pressure = motor_data.get('chamber_pressure', 20.0) * 1e5  # Pa
         chamber_temperature = motor_data.get('chamber_temperature', 3000)  # K
         chamber_diameter = motor_data.get('chamber_diameter', 0.1)  # m
         mdot_total = motor_data.get('mdot_total', 1.0)  # kg/s
-        
+
         # Gas properties - use combustion gas properties
-        R_gas = motor_data.get('gas_constant', 287)  # J/kg·K - from combustion analysis
+        R_gas = motor_data.get('gas_constant', 287)  # J/kg·K
         gas_conductivity = 0.2  # W/m·K
         gas_viscosity = 5e-5    # Pa·s
-        gas_density = chamber_pressure / (R_gas * chamber_temperature)  # kg/m³
-        gas_cp = motor_data.get('gas_cp', 1200)  # J/kg·K - from combustion analysis
-        
+        gas_density = chamber_pressure / (R_gas * chamber_temperature)  # kg/m^3
+        gas_cp = motor_data.get('gas_cp', 1200)  # J/kg·K
+        gamma = motor_data.get('gamma', 1.25)
+
         # Reynolds number
-        velocity = mdot_total / (gas_density * np.pi * (chamber_diameter/2)**2)
+        velocity = mdot_total / (gas_density * np.pi * (chamber_diameter / 2)**2)
         reynolds = gas_density * velocity * chamber_diameter / gas_viscosity
-        
+
         # Prandtl number
         prandtl = gas_cp * gas_viscosity / gas_conductivity
-        
-        # Nusselt number (Dittus-Boelter correlation)
-        nusselt = 0.023 * reynolds**0.8 * prandtl**0.4
-        
-        # Gas-side heat transfer coefficient
-        h_gas = nusselt * gas_conductivity / chamber_diameter
-        
+
+        if method == 'bartz':
+            h_gas = self._bartz_correlation(motor_data, chamber_pressure,
+                                            chamber_temperature, gas_viscosity,
+                                            gas_cp, prandtl, gamma)
+            correlation_used = 'bartz'
+        else:
+            # Dittus-Boelter (fallback)
+            nusselt = 0.023 * reynolds**0.8 * prandtl**0.4
+            h_gas = nusselt * gas_conductivity / chamber_diameter
+            correlation_used = 'dittus-boelter'
+
         # Coolant-side heat transfer coefficient
         if cooling_type == 'natural':
-            h_coolant = 25.0  # W/m²·K (natural convection in air)
+            h_coolant = 25.0  # W/m^2·K (natural convection in air)
         elif cooling_type == 'forced':
-            h_coolant = 100.0  # W/m²·K (forced air cooling)
+            h_coolant = 100.0  # W/m^2·K (forced air cooling)
         elif cooling_type == 'regenerative':
-            h_coolant = 2000.0  # W/m²·K (liquid cooling)
+            h_coolant = 2000.0  # W/m^2·K (liquid cooling)
         else:
             h_coolant = 25.0
-        
+
+        # Also compute Dittus-Boelter for comparison when Bartz is primary
+        nusselt_db = 0.023 * reynolds**0.8 * prandtl**0.4
+        h_gas_db = nusselt_db * gas_conductivity / chamber_diameter
+
         return {
             'gas_side': h_gas,
             'coolant_side': h_coolant,
             'reynolds_number': reynolds,
             'prandtl_number': prandtl,
-            'nusselt_number': nusselt
+            'nusselt_number': nusselt_db,
+            'correlation_used': correlation_used,
+            'h_gas_dittus_boelter': h_gas_db,
+            'h_gas_bartz': h_gas if correlation_used == 'bartz' else None
         }
+
+    def _bartz_correlation(self, motor_data: Dict, Pc: float, Tc: float,
+                           mu: float, cp: float, Pr: float, gamma: float) -> float:
+        """
+        Bartz correlation for gas-side convective heat transfer coefficient.
+
+        h_g = (0.026 / D_t^0.2) * (mu^0.2 * cp / Pr^0.6) *
+              (Pc * g0 / c_star)^0.8 * (D_t / R_c)^0.1 * (A_t / A)^0.9 * sigma
+
+        where sigma is the correction factor accounting for property variations
+        across the boundary layer.
+
+        Args:
+            motor_data: Motor data dict with geometry info
+            Pc: Chamber pressure in Pa
+            Tc: Chamber (stagnation) temperature in K
+            mu: Gas viscosity in Pa.s
+            cp: Specific heat in J/kg.K
+            Pr: Prandtl number
+            gamma: Ratio of specific heats
+
+        Returns:
+            Gas-side heat transfer coefficient h_g in W/m^2.K
+        """
+        # Geometry
+        throat_diameter = motor_data.get('throat_diameter', 0.03)  # m
+        D_t = throat_diameter
+        R_c = motor_data.get('chamber_radius_curvature', 1.5 * D_t / 2)  # m (default: 1.5 * r_t)
+        throat_area = np.pi * (D_t / 2)**2
+        # Local area - at the throat A_t/A = 1.0 (throat is the critical station for max heat flux)
+        local_area_ratio = motor_data.get('local_area_ratio', 1.0)  # A_t/A, default = 1 (throat)
+
+        # Characteristic velocity c*
+        R_gas = motor_data.get('gas_constant', 287)  # J/kg.K
+        c_star = np.sqrt(R_gas * Tc / gamma) / ((2 / (gamma + 1))**((gamma + 1) / (2 * (gamma - 1))))
+
+        # Mach number at the station (at throat M=1)
+        M_local = motor_data.get('local_mach', 1.0)
+
+        # Wall temperature estimate
+        T_wall = motor_data.get('wall_temperature', 800)  # K
+
+        # Sigma correction factor:
+        # sigma = 1 / [0.5 * (T_wall/T_c) * (1 + (gamma-1)/2 * M^2) + 0.5]^0.68
+        #         * (1 + (gamma-1)/2 * M^2)^0.12
+        T_ratio_term = 0.5 * (T_wall / Tc) * (1.0 + (gamma - 1.0) / 2.0 * M_local**2) + 0.5
+        sigma = (1.0 / T_ratio_term**0.68) * (1.0 + (gamma - 1.0) / 2.0 * M_local**2)**0.12
+
+        # Bartz equation
+        h_g = ((0.026 / D_t**0.2) *
+               (mu**0.2 * cp / Pr**0.6) *
+               (Pc * self.g0 / c_star)**0.8 *
+               (D_t / R_c)**0.1 *
+               (local_area_ratio)**0.9 *
+               sigma)
+
+        return h_g
     
     def _analyze_gas_side_heat_transfer(self, pressure: float, temperature: float,
                                       diameter: float, mdot: float, h_gas: float) -> Dict:
