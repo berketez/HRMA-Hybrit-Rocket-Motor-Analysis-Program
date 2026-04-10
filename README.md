@@ -8,6 +8,7 @@
     <img src="https://img.shields.io/badge/Python-3.8+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
     <img src="https://img.shields.io/badge/Flask-Web_App-000?style=flat-square&logo=flask" alt="Flask">
     <img src="https://img.shields.io/badge/Tests-73_passing-00C853?style=flat-square" alt="Tests">
+    <img src="https://img.shields.io/badge/CAD-STL_Export-FF6B35?style=flat-square" alt="CAD">
     <img src="https://img.shields.io/badge/License-Educational-blue?style=flat-square" alt="License">
   </p>
 </p>
@@ -16,36 +17,52 @@
 
 A comprehensive rocket propulsion analysis tool with real-time interactive visualizations, 3D CAD model generation (STL export), and physics-validated engineering calculations.
 
-## Features
+```
+       ╔══════════════════════════════════════════════════════╗
+       ║                                                      ║
+       ║    Injector   ┌──────────────┐   Convergent          ║
+       ║    ████████   │              │   Section    ╲        ║
+       ║    ████████   │  Combustion  │              ─╲       ║
+       ║    ████████   │   Chamber    │   Throat      ─╱      ║
+       ║    ████████   │              │              ╱        ║
+       ║    ████████   └──────────────┘   Divergent           ║
+       ║                                  Nozzle              ║
+       ║   Oxidizer     Fuel Grain         Exit               ║
+       ║    Feed        (HTPB/Wax)        Plane               ║
+       ╚══════════════════════════════════════════════════════╝
+                    F = mdot * Ve + (Pe - Pa) * Ae
+```
 
-### Engine Types
+## Engine Types
 
 | Type | Fuels | Oxidizers | Capabilities |
-|------|-------|-----------|-------------|
+|:----:|:------|:----------|:------------|
 | **Hybrid** | HTPB, Paraffin, ABS, PMMA | N2O, LOX, H2O2 | Regression rate, grain geometry, injector design |
-| **Solid** | APCP, Black powder, Sugar | — | BATES/Star/Wagon grain, burn rate curves |
-| **Liquid** | RP-1, LH2 | LOX | Regenerative cooling, turbopump/pressure-fed |
+| **Solid** | APCP, Black powder, Sugar | — | BATES / Star / Wagon grain, burn rate curves |
+| **Liquid** | RP-1, LH2 | LOX | Regenerative cooling, turbopump / pressure-fed |
 
-### Analysis Modules
+## Analysis Modules
 
 | Module | What It Computes |
-|--------|-----------------|
-| **Combustion** | Flame temperature, species composition, stoichiometric O/F, c* |
+|:------:|:----------------|
+| **Combustion** | Flame temperature, species composition, stoichiometric O/F, characteristic velocity c* |
 | **Nozzle Design** | Throat/exit sizing, bell/conical contours, Mach number (Newton-Raphson solver) |
 | **Heat Transfer** | Bartz correlation for gas-side h_g, thermal resistance network, wall temperatures |
-| **Trajectory** | ISA atmosphere, gravity model, powered/coasting/descent phases, drag |
+| **Trajectory** | ISA atmosphere, gravity model, powered / coasting / descent phases, drag |
 | **Structural** | Chamber stress, safety factors, material selection |
-| **CFD** | Flow field visualization, pressure/temperature distributions |
-| **CAD** | 3D STL export — chamber, nozzle, injector, fuel grain, full assembly |
+| **CFD** | Flow field visualization, pressure / temperature distributions |
+| **CAD Export** | 3D STL generation — chamber, nozzle, injector, fuel grain, full assembly |
 
-### Key Physics
+## Key Physics
 
-- **Thrust:** F = mdot * Ve + (Pe - Pa) * Ae (momentum + pressure thrust)
-- **Isp:** CF * c* / g0, with validated c* from thermochemistry
-- **Nozzle flow:** Isentropic relations with Newton-Raphson area-Mach solver
-- **Heat transfer:** Bartz correlation (primary) with Dittus-Boelter fallback
-- **Regression rate:** Marxman/Altman model: r_dot = a * G_ox^n
-- **Atmosphere:** ISA standard (troposphere lapse + stratosphere exponential)
+```
+Thrust          F  = mdot * Ve + (Pe - Pa) * Ae
+Specific Imp.   Isp = CF * c* / g0
+Nozzle Flow     A/A* = f(M, gamma)  →  Newton-Raphson solver
+Heat Transfer   h_g  = Bartz correlation (primary) | Dittus-Boelter (fallback)
+Regression      r_dot = a * G_ox^n   (Marxman / Altman model)
+Atmosphere      ISA standard: troposphere lapse + stratosphere exponential
+```
 
 ## Quick Start
 
@@ -57,83 +74,101 @@ cd HRMA-Hybrit-Rocket-Motor-Analysis-Program
 # Install dependencies
 pip install -r requirements.txt
 
-# Run
+# Launch
 python app.py
-
-# Open browser → http://localhost:5000
 ```
+
+Then open **http://localhost:5000** in your browser.
 
 ## Testing
 
-```bash
-# Run all 73 tests
-python -m pytest tests.py -v
+73 tests covering engine physics, nozzle design, combustion, heat transfer, trajectory, CAD generation, Flask integration, and physics consistency:
 
-# Test categories:
-#   - Engine physics (Isp, thrust, throat sizing, O/F split)
-#   - Nozzle design (isentropic relations, bell geometry)
-#   - Combustion (stoichiometry, exit temperature)
-#   - Heat transfer (Re, Pr, Nu, thermal resistance)
-#   - Trajectory (ISA atmosphere, gravity model)
-#   - CAD generation (STL file creation, mesh validation)
-#   - Flask integration (routes, endpoints)
-#   - Physics consistency (reference values, conservation laws)
+```bash
+python -m pytest tests.py -v
 ```
+
+```
+============================= 73 passed in 11s ==============================
+```
+
+| Test Suite | Count | Verifies |
+|:----------:|:-----:|:---------|
+| Engine Physics | 10 | Isp, thrust, throat sizing, O/F split, regression rate |
+| Nozzle Design | 9 | Isentropic relations, bell geometry, flow properties |
+| Combustion | 10 | Stoichiometry, exit temperature, species |
+| Heat Transfer | 10 | Re, Pr, Nu, Bartz, thermal resistance |
+| Trajectory | 10 | ISA atmosphere, gravity model, density |
+| CAD Generation | 6 | STL creation, mesh validation, dimensions |
+| Flask Integration | 8 | Routes, endpoints, error handling |
+| Physics Consistency | 10 | Reference values, conservation laws |
 
 ## Architecture
 
 ```
 app.py (Flask)
   │
-  ├── hybrid_rocket_engine.py     Engine simulation & grain design
-  ├── solid_rocket_engine.py      Solid motor burn analysis
-  ├── liquid_rocket_engine.py     Liquid engine cycle analysis
+  ├─── Engine Simulation ──────────────────────────────────
+  │    ├── hybrid_rocket_engine.py     Hybrid motor + grain design
+  │    ├── solid_rocket_engine.py      Solid motor burn analysis
+  │    └── liquid_rocket_engine.py     Liquid engine cycle analysis
   │
-  ├── combustion_analysis.py      Thermochemistry & flame temperature
-  ├── nozzle_design.py            Nozzle sizing & flow properties
-  ├── heat_transfer_analysis.py   Bartz correlation, thermal network
-  ├── structural_analysis.py      Chamber stress & safety factors
-  ├── trajectory_analysis.py      Flight simulation with ISA atmosphere
-  ├── cfd_analysis.py             Flow field computation
+  ├─── Analysis Modules ───────────────────────────────────
+  │    ├── combustion_analysis.py      Thermochemistry + flame temp
+  │    ├── nozzle_design.py            Nozzle sizing + flow properties
+  │    ├── heat_transfer_analysis.py   Bartz + thermal network
+  │    ├── structural_analysis.py      Chamber stress + safety
+  │    ├── trajectory_analysis.py      Flight sim + ISA atmosphere
+  │    └── cfd_analysis.py             Flow field computation
   │
-  ├── cad_design.py               3D motor assembly (trimesh + plotly)
-  ├── cad_generator.py            Tank CAD generation
-  ├── detailed_cad_generator.py   Component-level CAD
+  ├─── CAD / Export ───────────────────────────────────────
+  │    ├── cad_design.py               3D assembly (trimesh + plotly)
+  │    ├── cad_generator.py            Tank CAD generation
+  │    └── detailed_cad_generator.py   Component-level CAD
   │
-  ├── templates/                  HTML (index, hybrid, solid, liquid)
-  ├── static/                     CSS, JS
-  └── tests.py                    73 unit tests
+  ├─── Web Interface ──────────────────────────────────────
+  │    ├── templates/                  HTML pages
+  │    └── static/                     CSS, JS, assets
+  │
+  └─── tests.py                        73 unit tests
 ```
 
 ## CAD Export
 
-The platform generates STL files for all motor components:
+The platform generates production-ready STL files:
 
 ```
 cad_exports/
-  ├── liquid_hybrid_assembly.stl    Full motor assembly
-  ├── liquid_hybrid_chamber.stl     Combustion chamber (watertight)
-  ├── liquid_hybrid_nozzle.stl      Convergent-divergent nozzle
-  ├── liquid_hybrid_injector.stl    Injector head
+  ├── liquid_hybrid_assembly.stl      Full motor assembly
+  ├── liquid_hybrid_chamber.stl       Combustion chamber (watertight, 3D-print ready)
+  ├── liquid_hybrid_nozzle.stl        Convergent-divergent nozzle
+  ├── liquid_hybrid_injector.stl      Injector head
+  ├── liquid_hybrid_gimbal.stl        Gimbal mount
   └── ...
 ```
 
-STL files are compatible with Fusion 360, SolidWorks, FreeCAD, and 3D printers.
+Compatible with **Fusion 360**, **SolidWorks**, **FreeCAD**, and 3D printers.
 
 ## Requirements
 
-- Python 3.8+
-- Flask, NumPy, SciPy, Matplotlib, Plotly
-- trimesh (for CAD/STL export)
-- Optional: CoolProp, Cantera (for advanced thermochemistry)
+| Package | Purpose |
+|:--------|:--------|
+| Flask | Web application server |
+| NumPy, SciPy | Numerical computation |
+| Matplotlib, Plotly | Visualization |
+| trimesh | 3D mesh / STL generation |
+| CoolProp *(optional)* | Fluid properties |
+| Cantera *(optional)* | Advanced thermochemistry |
 
 ## Version
 
 **HRMA v2.0** — Professional Rocket Propulsion Design Tool
 
-- **Developed by:** Berke Tezgöçen
-- **Idea & Testing:** Ayberk Cem Aksoy
-- **Last Updated:** 2026
+| | |
+|:--|:--|
+| **Developed by** | Berke Tezgocen |
+| **Idea & Testing** | Ayberk Cem Aksoy |
+| **Last Updated** | 2026 |
 
 ## License
 
@@ -141,10 +176,8 @@ Educational and research use. Free for academic research and amateur rocketry.
 
 ---
 
-## Ready to Design?
-
-1. **Clone the repo**
-2. **`pip install -r requirements.txt`**
-3. **`python app.py`**
-4. **Open `http://localhost:5000`**
-5. **Start designing rockets!**
+<p align="center">
+  <strong>Ready to Design?</strong><br><br>
+  <code>git clone</code> &rarr; <code>pip install -r requirements.txt</code> &rarr; <code>python app.py</code> &rarr; <a href="http://localhost:5000">localhost:5000</a><br><br>
+  <strong>Start designing rockets!</strong>
+</p>
