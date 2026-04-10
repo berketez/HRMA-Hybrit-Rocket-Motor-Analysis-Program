@@ -127,11 +127,24 @@ STL files are compatible with Fusion 360, SolidWorks, FreeCAD, and 3D printers.
 - trimesh (for CAD/STL export)
 - Optional: CoolProp, Cantera (for advanced thermochemistry)
 
-## Authors
+## Version
 
-- **Berke Tezgöçen** — Development
-- **Ayberk Cem Aksoy** — Idea & Testing
+**HRMA v2.0** — Professional Rocket Propulsion Design Tool
+
+- **Developed by:** Berke Tezgöçen
+- **Idea & Testing:** Ayberk Cem Aksoy
+- **Last Updated:** 2026
 
 ## License
 
 Educational and research use. Free for academic research and amateur rocketry.
+
+---
+
+## Ready to Design?
+
+1. **Clone the repo**
+2. **`pip install -r requirements.txt`**
+3. **`python app.py`**
+4. **Open `http://localhost:5000`**
+5. **Start designing rockets!**
